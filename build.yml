@@ -1,0 +1,97 @@
+name: Build Shairport Sync ARMv7 for webOS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Enable ARM emulation
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm
+
+      - name: Download Shairport Sync 3.3.9
+        run: |
+          curl -L \
+            https://github.com/mikebrady/shairport-sync/archive/refs/tags/3.3.9.tar.gz \
+            -o shairport-sync-3.3.9.tar.gz
+
+      - name: Create ARMv7 build script
+        run: |
+          cat > build-arm.sh <<'EOF'
+          #!/bin/sh
+          set -eux
+
+          echo 'deb http://archive.debian.org/debian wheezy main' > /etc/apt/sources.list
+          echo 'deb http://archive.debian.org/debian wheezy-backports main' >> /etc/apt/sources.list
+
+          printf 'Acquire::Check-Valid-Until "false";\nAcquire::AllowInsecureRepositories "true";\n' \
+            > /etc/apt/apt.conf.d/99archive
+
+          apt-get -o Acquire::Check-Valid-Until=false update
+
+          apt-get install -y --force-yes \
+            build-essential \
+            autoconf \
+            automake \
+            libtool \
+            pkg-config \
+            libpulse-dev \
+            libconfig-dev \
+            libpopt-dev \
+            libdaemon-dev \
+            libssl-dev
+
+          tar -xzf /src/shairport-sync-3.3.9.tar.gz
+          cd shairport-sync-3.3.9
+
+          autoreconf -i -f
+
+          ./configure \
+            --with-pa \
+            --with-tinysvcmdns \
+            --with-ssl=openssl \
+            --with-metadata \
+            --without-alsa \
+            --sysconfdir=/etc
+
+          make -j2
+
+          ./shairport-sync -V || true
+
+          mkdir -p /out
+          cp shairport-sync /out/shairport-sync-webos-armv7
+
+          cp /usr/lib/arm-linux-gnueabihf/libpulse.so.0 /out/ 2>/dev/null || true
+          cp /usr/lib/arm-linux-gnueabihf/libpulse-simple.so.0 /out/ 2>/dev/null || true
+          EOF
+
+          chmod +x build-arm.sh
+
+      - name: Build inside ARMv7 Debian Wheezy
+        run: |
+          mkdir -p output
+
+          docker run --rm \
+            --platform linux/arm/v7 \
+            -v "$PWD:/src" \
+            -v "$PWD/output:/out" \
+            arm32v7/debian:wheezy \
+            /src/build-arm.sh
+
+      - name: Inspect result
+        run: |
+          ls -lah output
+          file output/shairport-sync-webos-armv7 || true
+
+      - name: Upload ARMv7 build
+        uses: actions/upload-artifact@v4
+        with:
+          name: shairport-sync-webos-armv7
+          path: output/*
