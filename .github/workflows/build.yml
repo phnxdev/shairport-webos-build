@@ -1,4 +1,4 @@
-name: Build Shairport Sync ARMv7 for webOS
+name: Build Shairport Sync ARMEL for webOS
 
 on:
   workflow_dispatch:
@@ -16,7 +16,7 @@ jobs:
         with:
           platforms: arm
 
-      - name: Download Shairport Sync
+      - name: Download Shairport Sync 3.3.9
         run: |
           curl -L https://github.com/mikebrady/shairport-sync/archive/refs/tags/3.3.9.tar.gz -o shairport-sync-3.3.9.tar.gz
 
@@ -69,33 +69,36 @@ jobs:
           echo "=== VERSION ==="
           ./shairport-sync -V
 
-          echo "=== LINKED LIBRARIES ==="
+          echo "=== ELF INTERPRETER ==="
+          readelf -l ./shairport-sync | grep interpreter || true
+
+          echo "=== LIBRARIES ==="
           ldd ./shairport-sync || true
 
           mkdir -p /out
-          cp ./shairport-sync /out/shairport-sync-webos-armv7
+          cp ./shairport-sync /out/shairport-sync-webos-armel
           EOF
 
           chmod +x build-arm.sh
 
-      - name: Build ARMv7
+      - name: Build ARMEL
         run: |
           mkdir -p output
 
           docker run --rm \
-            --platform linux/arm/v7 \
+            --platform linux/arm/v5 \
             -v "$PWD:/src" \
             -v "$PWD/output:/out" \
-            arm32v7/debian:wheezy \
+            arm32v5/debian:wheezy \
             /src/build-arm.sh
 
-      - name: Inspect build
+      - name: Inspect result
         run: |
           ls -lah output
-          file output/shairport-sync-webos-armv7
+          file output/shairport-sync-webos-armel
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: shairport-sync-webos-armv7
-          path: output/shairport-sync-webos-armv7
+          name: shairport-sync-webos-armel
+          path: output/shairport-sync-webos-armel
