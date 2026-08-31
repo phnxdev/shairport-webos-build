@@ -16,17 +16,20 @@ jobs:
         with:
           platforms: arm
 
-      - name: Download Shairport Sync 3.3.9
+      - name: Download Shairport Sync
         run: |
           curl -L https://github.com/mikebrady/shairport-sync/archive/refs/tags/3.3.9.tar.gz -o shairport-sync-3.3.9.tar.gz
 
-      - name: Create ARMv7 build script
+      - name: Create build script
         run: |
           cat > build-arm.sh <<'EOF'
           #!/bin/sh
           set -eux
 
-          echo 'deb [trusted=yes] http://archive.debian.org/debian wheezy main' > /etc/apt/sources.list
+          cat > /etc/apt/sources.list <<'SOURCES'
+          deb [trusted=yes] http://archive.debian.org/debian wheezy main
+          deb [trusted=yes] http://archive.debian.org/debian-security wheezy/updates main
+          SOURCES
 
           cat > /etc/apt/apt.conf.d/99archive <<'APTCONF'
           Acquire::Check-Valid-Until "false";
@@ -37,12 +40,7 @@ jobs:
           apt-get update
 
           apt-get install -y --force-yes \
-            libc6-dev \
-            gcc \
-            g++ \
-            make \
-            perl \
-            dpkg-dev \
+            build-essential \
             autoconf \
             automake \
             libtool \
@@ -68,15 +66,19 @@ jobs:
 
           make -j2
 
-          ./shairport-sync -V || true
+          echo "=== VERSION ==="
+          ./shairport-sync -V
+
+          echo "=== LINKED LIBRARIES ==="
+          ldd ./shairport-sync || true
 
           mkdir -p /out
-          cp shairport-sync /out/shairport-sync-webos-armv7
+          cp ./shairport-sync /out/shairport-sync-webos-armv7
           EOF
 
           chmod +x build-arm.sh
 
-      - name: Build inside ARMv7 Debian Wheezy
+      - name: Build ARMv7
         run: |
           mkdir -p output
 
@@ -87,10 +89,10 @@ jobs:
             arm32v7/debian:wheezy \
             /src/build-arm.sh
 
-      - name: Inspect result
+      - name: Inspect build
         run: |
           ls -lah output
-          file output/shairport-sync-webos-armv7 || true
+          file output/shairport-sync-webos-armv7
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
