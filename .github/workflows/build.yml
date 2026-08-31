@@ -18,9 +18,7 @@ jobs:
 
       - name: Download Shairport Sync 3.3.9
         run: |
-          curl -L \
-            https://github.com/mikebrady/shairport-sync/archive/refs/tags/3.3.9.tar.gz \
-            -o shairport-sync-3.3.9.tar.gz
+          curl -L https://github.com/mikebrady/shairport-sync/archive/refs/tags/3.3.9.tar.gz -o shairport-sync-3.3.9.tar.gz
 
       - name: Create ARMv7 build script
         run: |
@@ -28,16 +26,23 @@ jobs:
           #!/bin/sh
           set -eux
 
-          echo 'deb http://archive.debian.org/debian wheezy main' > /etc/apt/sources.list
-          echo 'deb http://archive.debian.org/debian wheezy-backports main' >> /etc/apt/sources.list
+          echo 'deb [trusted=yes] http://archive.debian.org/debian wheezy main' > /etc/apt/sources.list
 
-          printf 'Acquire::Check-Valid-Until "false";\nAcquire::AllowInsecureRepositories "true";\n' \
-            > /etc/apt/apt.conf.d/99archive
+          cat > /etc/apt/apt.conf.d/99archive <<'APTCONF'
+          Acquire::Check-Valid-Until "false";
+          Acquire::AllowInsecureRepositories "true";
+          APT::Get::AllowUnauthenticated "true";
+          APTCONF
 
-          apt-get -o Acquire::Check-Valid-Until=false update
+          apt-get update
 
           apt-get install -y --force-yes \
-            build-essential \
+            libc6-dev \
+            gcc \
+            g++ \
+            make \
+            perl \
+            dpkg-dev \
             autoconf \
             automake \
             libtool \
@@ -51,7 +56,7 @@ jobs:
           tar -xzf /src/shairport-sync-3.3.9.tar.gz
           cd shairport-sync-3.3.9
 
-          autoreconf -i -f
+          autoreconf -fi
 
           ./configure \
             --with-pa \
@@ -67,9 +72,6 @@ jobs:
 
           mkdir -p /out
           cp shairport-sync /out/shairport-sync-webos-armv7
-
-          cp /usr/lib/arm-linux-gnueabihf/libpulse.so.0 /out/ 2>/dev/null || true
-          cp /usr/lib/arm-linux-gnueabihf/libpulse-simple.so.0 /out/ 2>/dev/null || true
           EOF
 
           chmod +x build-arm.sh
@@ -90,8 +92,8 @@ jobs:
           ls -lah output
           file output/shairport-sync-webos-armv7 || true
 
-      - name: Upload ARMv7 build
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: shairport-sync-webos-armv7
-          path: output/*
+          path: output/shairport-sync-webos-armv7
